@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remote setup</title>
+<link rel="icon" href="/icon.svg">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body class="setup">
+<main class="setup-main">
+  <h1><span class="spark"></span> Remote setup</h1>
+  <section class="card pad">
+    <h2>1 · Pair the phone</h2>
+    <p class="muted">Scan with the phone's camera, on the home Wi-Fi. The link holds the key: don't share it.</p>
+    <div class="pairbox">
+      <img id="qr" src="/api/pair-qr.svg" alt="Pairing QR code" width="200" height="200">
+      <div><code id="pairUrl"></code><p><button class="chip" id="copy">Copy link</button></p></div>
+    </div>
+  </section>
+  <section class="card pad">
+    <h2>2 · Spotify</h2>
+    <div id="spState" class="muted">Loading…</div>
+    <ol class="steps" id="spSteps">
+      <li>Open <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a>, sign in, <b>Create app</b>.</li>
+      <li>Name it "Remote", tick <b>Web API</b>, and add this Redirect URI exactly: <code id="redirect"></code></li>
+      <li>Save, open the app's <b>Settings</b>, and copy the <b>Client ID</b> here:</li>
+    </ol>
+    <form id="cidForm" class="cid"><input id="cid" placeholder="Client ID" autocomplete="off" spellcheck="false"><button class="chip">Save</button></form>
+    <p><a class="btn allow inline" id="connect" href="/spotify/login">Connect Spotify</a> <button class="chip" id="disconnect" hidden>Disconnect</button></p>
+  </section>
+  <section class="card pad">
+    <h2>3 · Open on the phone</h2>
+    <p class="muted">Landscape on a stand works best. Tap once to turn on sounds and full screen. <a href="/">Open here</a></p>
+  </section>
+</main>
+<div class="toast" id="toast" hidden></div>
+<script src="/setup.js"></script>
+</body>
+</html>

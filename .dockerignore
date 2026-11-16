@@ -1,0 +1,4 @@
+data
+tests/shots
+.git
+**/__pycache__

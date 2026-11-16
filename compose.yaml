@@ -1,0 +1,6 @@
+# Tests only: docker-compose run --rm --build test   (screenshots land in tests/shots)
+services:
+  test:
+    build: { context: ., target: test }
+    volumes:
+      - ./tests/shots:/app/tests/shots

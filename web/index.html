@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#08090c">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Remote</title>
+<link rel="icon" href="/icon.svg">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<main class="app">
+  <section class="clock card" id="clock">
+    <div class="time"><span id="hm">--:--</span><span class="sec" id="sec">--</span></div>
+    <div class="date" id="date"></div>
+  </section>
+
+  <section class="music card" id="music">
+    <div class="art-bg" id="artBg"></div>
+    <div class="music-in">
+      <div class="track">
+        <img class="art" id="art" alt="" hidden>
+        <div class="art art-empty" id="artEmpty"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+        <div class="meta">
+          <div class="title" id="trTitle">Spotify</div>
+          <div class="artist" id="trArtist">Loading…</div>
+          <div class="on-dev" id="onDev"></div>
+        </div>
+        <button class="chip" id="devBtn" title="Devices and playlists"><svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><circle cx="12" cy="14" r="4"/><path d="M12 6h.01"/></svg><span id="devName">Pick</span></button>
+      </div>
+      <div class="progress" id="progress"><div class="bar" id="bar"></div></div>
+      <div class="controls">
+        <button class="ctl small" id="shuffle" title="Shuffle"><svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></button>
+        <button class="ctl" id="prev" title="Previous"><svg viewBox="0 0 24 24"><path d="M19 20 9 12l10-8v16Z" class="fill"/><path d="M5 19V5"/></svg></button>
+        <button class="ctl play" id="play" title="Play / pause"><svg viewBox="0 0 24 24" id="playIcon"><path d="M7 4v16l13-8z" class="fill"/></svg></button>
+        <button class="ctl" id="next" title="Next"><svg viewBox="0 0 24 24"><path d="m5 4 10 8-10 8V4Z" class="fill"/><path d="M19 5v14"/></svg></button>
+        <button class="ctl small" id="repeat" title="Repeat"><svg viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg><i id="repeatOne">1</i></button>
+      </div>
+      <div class="volume"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z" class="fill"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg><input type="range" id="vol" min="0" max="100" value="50" aria-label="Volume"></div>
+    </div>
+    <div class="music-off" id="musicOff" hidden></div>
+  </section>
+
+  <section class="claude card" id="claude">
+    <header class="claude-head">
+      <div class="brand"><span class="spark"></span><h2>Claude</h2><span class="count" id="count"></span></div>
+      <div class="head-actions">
+        <button class="mode" id="mode" aria-pressed="true"><span class="knob"></span><span class="lbl" id="modeLbl">Phone answers</span></button>
+        <button class="icon-btn" id="settingsBtn" title="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></button>
+      </div>
+    </header>
+    <ul class="sessions" id="sessions"></ul>
+    <div class="empty" id="empty">
+      <div class="empty-orb"></div>
+      <p>No Claude sessions yet</p>
+      <small>They show up here as soon as one starts on the computer.</small>
+    </div>
+  </section>
+</main>
+
+<div class="offline" id="offline" hidden>Reconnecting…</div>
+
+<!-- permission request -->
+<div class="ask" id="ask" hidden role="dialog" aria-modal="true" aria-labelledby="askTitle">
+  <div class="ask-card">
+    <div class="ask-top">
+      <span class="pill" id="askSession"></span>
+      <span class="ask-of" id="askOf"></span>
+      <span class="ask-timer" id="askTimer"></span>
+    </div>
+    <h3 id="askTitle"></h3>
+    <div class="ask-tool" id="askTool"></div>
+    <pre class="ask-detail" id="askDetail"></pre>
+    <div class="ask-btns">
+      <button class="btn deny" id="denyBtn"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>Deny</button>
+      <button class="btn allow" id="allowBtn"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Allow</button>
+    </div>
+  </div>
+</div>
+
+<!-- sheets -->
+<div class="sheet-wrap" id="sheetWrap" hidden>
+  <div class="sheet" id="sheet">
+    <div class="grab"></div>
+    <div id="sheetBody"></div>
+  </div>
+</div>
+
+<!-- first tap: unlock sound, go fullscreen -->
+<div class="start" id="start">
+  <div class="start-orb"></div>
+  <h1>Remote</h1>
+  <p>Tap to start</p>
+  <small>Turns on sound alerts and full screen</small>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<script src="/app.js"></script>
+</body>
+</html>
