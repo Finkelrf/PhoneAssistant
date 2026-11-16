@@ -46,7 +46,7 @@ def open_page(browser, server, size, scale=1):
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.route("**/api/spotify/player", lambda r: r.fulfill(json=PLAYER))
     page.route("**/api/spotify/*", lambda r: r.fulfill(json={"ok": True}) if r.request.method == "POST" else r.fallback())
-    page.goto(server.url + "/pair?t=" + server.token)
+    page.goto(server.url + "/")
     page.click("#start")
     return ctx, page, errors
 
@@ -158,20 +158,11 @@ def test_sheets(browser, server, size):
     ctx.close()
 
 
-def test_not_paired(browser, server):
-    ctx = browser.new_context()
-    page = ctx.new_page()
-    page.goto(server.url + "/")
-    expect(page.locator("h1")).to_have_text("Not paired")
-    ctx.close()
-
-
 def test_setup_page(browser, server):
     ctx = browser.new_context(viewport={"width": 1280, "height": 900})
     page = ctx.new_page()
-    page.goto(server.url + "/pair?t=" + server.token)
     page.goto(server.url + "/setup")
-    expect(page.locator("#pairUrl")).to_contain_text("http://192.168.1.50:8796/pair?t=")
+    expect(page.locator("#pairUrl")).to_have_text("http://192.168.1.50:8796/")
     expect(page.locator("#redirect")).to_have_text(f"http://127.0.0.1:{server.port}/spotify/callback")
     page.fill("#cid", "abc123def456")
     page.click("#cidForm button")

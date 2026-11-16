@@ -14,28 +14,20 @@ def wait_for(fn, t=5):
     raise AssertionError("timed out")
 
 
-def test_auth_required(server):
-    assert server.req("/api/state", cookie=False)[0] == 401
-    assert server.req("/hook/event", {"x": 1}, cookie=False)[0] == 401
-    assert server.req("/hook/event", {"x": 1}, cookie=False, headers={"X-Remote-Token": "nope"})[0] == 401
-    # POST without the custom header is refused even with the cookie (cross-site forms can't add it)
-    code, _ = server.req("/api/settings", {"away": False}, headers={"X-Remote": "0"})
-    assert code == 403
+def test_access(server):
+    # the page is open on the home network: no pairing
     assert server.req("/api/state")[0] == 200
-
-
-def test_pairing_sets_cookie(server):
-    import urllib.request
-    class NoRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, *a, **k): return None
-    op = urllib.request.build_opener(NoRedirect)
-    try:
-        op.open(server.url + "/pair?t=" + server.token)
-    except urllib.error.HTTPError as e:
-        assert e.code == 303
-        c = e.headers["set-cookie"]
-        assert "remote_token=" + server.token in c and "HttpOnly" in c and "SameSite=strict" in c
-    assert server.req("/pair?t=wrong", cookie=False)[0] == 401
+    # hooks still need the key from the token file
+    assert server.req("/hook/event", {"x": 1})[0] == 401
+    assert server.req("/hook/event", {"x": 1}, headers={"X-Remote-Token": "nope"})[0] == 401
+    assert server.req("/hook/event", {"x": 1}, headers={"X-Remote-Token": server.token})[0] == 200
+    # POST without the custom header is refused (a cross-site form or fetch can't add it without CORS)
+    assert server.req("/api/settings", {"away": False}, headers={"X-Remote": "0"})[0] == 403
+    # requests for other host names are refused (DNS rebinding)
+    for host in ("evil.example", "evil.example:8796"):
+        assert server.req("/api/state", headers={"Host": host})[0] == 421
+    assert server.req("/api/state", headers={"Host": "192.168.1.50:8796"})[0] == 200
+    assert server.req("/api/state", headers={"Host": "localhost"})[0] == 200
 
 
 def test_session_lifecycle(server):
@@ -144,12 +136,11 @@ def test_hook_fails_open_when_server_down(server):
 def test_spotify_not_connected(server):
     assert server.req("/api/spotify/player")[1] == {"connected": False}
     code, st = server.req("/api/spotify/status")
-    assert st["connected"] is False and st["pair_url"].startswith("http://192.168.1.50:8796/pair?t=")
+    assert st["connected"] is False and st["phone_url"] == "http://192.168.1.50:8796/"
     assert server.req("/api/spotify/config", {"client_id": "bad id!"})[0] == 400
     assert server.req("/api/spotify/config", {"client_id": "abc123def456"})[1]["configured"] is True
 
 
 def test_qr(server):
     import urllib.request
-    r = urllib.request.Request(server.url + "/api/pair-qr.svg", headers={"Cookie": f"remote_token={server.token}"})
-    assert urllib.request.urlopen(r).read().startswith(b"<?xml")
+    assert urllib.request.urlopen(server.url + "/api/phone-qr.svg").read().startswith(b"<?xml")

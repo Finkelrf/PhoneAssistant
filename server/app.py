@@ -7,12 +7,14 @@ import json
 import os
 import secrets
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.datastructures import MutableHeaders
 from starlette.requests import Request
-from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
+from starlette.responses import (FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse,
+                                 Response, StreamingResponse)
 from starlette.routing import Route
 
 from .spotify import Spotify, SpotifyError
@@ -20,7 +22,6 @@ from .state import Hub, describe_tool
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
-COOKIE = "remote_token"
 STATIC = {"/": "index.html", "/app.js": "app.js", "/app.css": "app.css", "/setup": "setup.html",
           "/setup.js": "setup.js", "/icon.svg": "icon.svg"}
 CSP = ("default-src 'self'; img-src 'self' data: https:; style-src 'self'; script-src 'self'; "
@@ -50,6 +51,8 @@ def create_app(data_dir: str | Path | None = None, public_url: str | None = None
     hub = Hub(data_dir)
     spotify = Spotify(data_dir, f"http://127.0.0.1:{port}/spotify/callback", os.environ.get("SPOTIFY_CLIENT_ID", ""))
 
+    hosts = {"127.0.0.1", "localhost", urlsplit(public_url).hostname}
+
     def good(value: str | None) -> bool:
         return bool(value) and hmac.compare_digest(value.encode(), token.encode())
 
@@ -65,16 +68,14 @@ def create_app(data_dir: str | Path | None = None, public_url: str | None = None
             request = Request(scope)
             path = scope["path"]
             deny = None
-            if path in ("/health", "/pair"):
+            if request.url.hostname not in hosts:
+                # only our own addresses: a web page can't reach us through DNS rebinding
+                deny = PlainTextResponse("Unknown host", 421)
+            elif path == "/health":
                 pass
             elif path.startswith("/hook/"):
                 if not good(request.headers.get("x-remote-token")):
                     deny = JSONResponse({"error": "bad token"}, 401)
-            elif not good(request.cookies.get(COOKIE)):
-                if path.startswith("/api/") or request.method != "GET":
-                    deny = JSONResponse({"error": "not paired"}, 401)
-                else:
-                    deny = HTMLResponse(NOT_PAIRED, 401)
             elif request.method == "POST" and request.headers.get("x-remote") != "1":
                 deny = JSONResponse({"error": "missing header"}, 403)
 
@@ -96,19 +97,11 @@ def create_app(data_dir: str | Path | None = None, public_url: str | None = None
         name = STATIC[request.url.path]
         return FileResponse(WEB / name, headers={"Cache-Control": "no-cache"})
 
-    async def pair(request: Request):
-        t = request.query_params.get("t", "")
-        if not good(t):
-            return HTMLResponse(NOT_PAIRED, 401)
-        r = RedirectResponse("/", 303)
-        r.set_cookie(COOKIE, token, max_age=10 * 365 * 86400, httponly=True, samesite="strict")
-        return r
-
-    async def pair_qr(_):
+    async def phone_qr(_):
         import io
         import segno
         buf = io.BytesIO()
-        segno.make(f"{public_url}/pair?t={token}", error="m").save(buf, kind="svg", scale=6, border=2)
+        segno.make(public_url + "/", error="m").save(buf, kind="svg", scale=6, border=2)
         return Response(buf.getvalue(), media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
 
     async def health(_):
@@ -224,7 +217,7 @@ def create_app(data_dir: str | Path | None = None, public_url: str | None = None
     async def sp_status(_):
         return JSONResponse({"configured": spotify.configured, "connected": spotify.connected,
                              "client_id": spotify.cfg.get("client_id", ""), "redirect_uri": spotify.redirect_uri,
-                             "pair_url": f"{public_url}/pair?t={token}", "public_url": public_url})
+                             "phone_url": public_url + "/", "public_url": public_url})
 
     async def sp_config(request: Request):
         body = await request.json()
@@ -288,9 +281,8 @@ def create_app(data_dir: str | Path | None = None, public_url: str | None = None
             return JSONResponse({"error": "Bad request"}, 400)
 
     routes = [Route(p, static) for p in STATIC] + [
-        Route("/pair", pair),
         Route("/health", health),
-        Route("/api/pair-qr.svg", pair_qr),
+        Route("/api/phone-qr.svg", phone_qr),
         Route("/api/state", state),
         Route("/api/stream", stream),
         Route("/api/requests/{rid}", answer, methods=["POST"]),
@@ -313,9 +305,3 @@ def create_app(data_dir: str | Path | None = None, public_url: str | None = None
     app.state.token = token
     app.state.spotify = spotify
     return app
-
-
-NOT_PAIRED = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Remote</title><body style="background:#0b0c10;color:#e8e8ee;font:16px system-ui;display:grid;place-items:center;
-height:100vh;margin:0;text-align:center;padding:16px"><div><h1 style="font-weight:600">Not paired</h1>
-<p style="color:#9a9aa8">Open the pairing link or scan the QR code from the computer's setup page.</p></div></body>"""

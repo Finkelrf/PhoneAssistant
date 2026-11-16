@@ -9,7 +9,7 @@
     return d;
   }
   function render(s) {
-    $("pairUrl").textContent = s.pair_url;
+    $("pairUrl").textContent = s.phone_url;
     $("redirect").textContent = s.redirect_uri;
     $("cid").value = s.client_id || "";
     $("spState").innerHTML = s.connected ? '<b class="ok">Connected.</b> The phone can control Spotify.'

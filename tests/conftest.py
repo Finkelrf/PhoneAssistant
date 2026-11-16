@@ -42,10 +42,8 @@ class Server:
         out, _ = p.communicate(data, timeout=timeout)
         return p.returncode, out
 
-    def req(self, path, body=None, cookie=True, headers=None):
+    def req(self, path, body=None, headers=None):
         h = {"Content-Type": "application/json", "X-Remote": "1", **(headers or {})}
-        if cookie:
-            h["Cookie"] = f"remote_token={self.token}"
         r = urllib.request.Request(self.url + path, data=None if body is None else json.dumps(body).encode(),
                                    method="GET" if body is None else "POST", headers=h)
         try:

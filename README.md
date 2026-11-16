@@ -33,10 +33,9 @@ Claude Code (desktop app / CLI)                  Docker: remote (port 8796)     
 
 ## Files
 
-- `server/app.py` - routes, the pairing cookie, the hook endpoints and the Spotify routes
+- `server/app.py` - routes, the host check, the hook endpoints and the Spotify routes
 - `server/state.py` - sessions and pending permission requests (`state.json` in the data folder)
 - `server/spotify.py` - Spotify Web API client
-- `server/manage.py` - `python -m server.manage pair` prints the pairing links
 - `web/` - the phone page (`index.html`, `app.css`, `app.js`) and the computer's setup page (`setup.html`, `setup.js`)
 - `hooks/claude_hook.py` - the Claude Code hook
 - `tests/` - API tests, Spotify tests (mocked), and browser tests at 640×360 and 360×640 (screenshots in `tests/shots/`)
@@ -51,20 +50,15 @@ docker-compose up -d --build remote      # first start, or after any change here
 docker logs -f remote
 ```
 
-- Data (token, `state.json`, `spotify.json`) lives in `home-dashboard/configs/remote`, not in this repository.
-- `REMOTE_URL` (`http://192.168.1.163:8796`) is the address the phone's pairing link and QR code use. Change it if the computer's LAN address changes (a DHCP reservation on the router keeps it fixed).
+- Data (hook key `token`, `state.json`, `spotify.json`) lives in `home-dashboard/configs/remote`, not in this repository.
+- `REMOTE_URL` (`http://192.168.1.163:8796`) is the phone's address: the setup page's QR code shows it, and only this host name (plus 127.0.0.1 and localhost) is answered. Change it if the computer's LAN address changes (a DHCP reservation on the router keeps it fixed).
 
-### Pairing
+### Access
 
-There is one secret token (`configs/remote/token`). The phone and the computer each get it once, as a long-lived cookie, by opening a pairing link:
+There is no sign-in or pairing: any device on the home network can open `http://192.168.1.163:8796/` and use it, Allow and Deny included (the user's choice). The setup page has a QR code of that address for the phone. What stays protected:
 
-```bash
-docker exec remote python -m server.manage pair
-```
-
-1. Open the **Computer** link in a browser on this computer. It lands on the page; then go to `http://127.0.0.1:8796/setup`.
-2. Scan the QR code on the setup page with the phone. Anyone with the link can approve Claude actions, so don't share it.
-3. To revoke access, delete `configs/remote/token` and restart; a new token is made and every device must pair again.
+- Hook calls (`/hook/*`) need the key in `configs/remote/token`, which `hooks/claude_hook.py` reads from the file. Without it, nothing else on the network can post fake sessions or prompts. Delete the file and restart to make a new key.
+- The server answers only requests addressed to its own LAN address (from `REMOTE_URL`), `127.0.0.1` or `localhost`, so a web page can't reach it through DNS rebinding. Changes need an `X-Remote: 1` header, which other sites can't send to it.
 
 ### Spotify (once)
 
@@ -91,7 +85,7 @@ To turn it all off, remove those entries. Stopping the container is also safe: t
 
 ### On the phone
 
-- Open the paired page in Chrome and tap once. That turns on sound (browsers only allow sound after a tap) and full screen.
+- Open `http://192.168.1.163:8796/` in Chrome and tap once. That turns on sound (browsers only allow sound after a tap) and full screen.
 - **Keep the screen on.** The Wake Lock API only works on https or localhost, so over `http://192.168.x.x` use one of these:
   - turn on Android *Developer options → Stay awake* (while charging), or
   - in Chrome, open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, add `http://192.168.1.163:8796`, then relaunch. Wake Lock then works too.
