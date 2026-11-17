@@ -5,6 +5,7 @@ A page for an old phone on a stand (made for a Moto G5s, landscape 640×360, als
 - **a clock**,
 - **Claude Code sessions** on this computer: what each one is doing, and **Allow / Deny** buttons when Claude asks for permission, with **sound alerts** when Claude needs you,
 - **Spotify controls**: now playing, play/pause, skip, seek, shuffle, repeat, volume, the device it plays on, and your playlists.
+- **Lyrics** of the song that's playing, following the music line by line.
 
 It runs only on the home network. There is no Cloudflare route, because answering permission prompts is close to running commands on this computer.
 
@@ -30,13 +31,19 @@ Claude Code (desktop app / CLI)                  Docker: remote (port 8796)     
   - A reminder repeats every 45 s while something is still waiting. Settings has volume, test and on/off switches; these are kept on the phone.
 - **Auto mode**: Claude Code ignores a hook's *Allow* while a session is in auto mode (or plan mode), so in those sessions only *Deny* from the phone takes effect.
 - Spotify is called by the server, never by the phone. The sign-in uses Authorization Code with PKCE (no client secret). The refresh token is in `configs/remote/spotify.json`. Playback control needs Spotify Premium.
+- **Lyrics** come from LRCLIB (lrclib.net), a free open lyrics database with no key; Spotify's Web API has no lyrics.
+  - The Lyrics button in the player opens them full screen; in landscape it's the round button next to the volume. Tapping the album art also opens them, which helps when the screen is too short for the volume row.
+  - The server asks LRCLIB with only the song's title, first artist, album and length (`GET /api/lyrics`), and keeps answers in memory.
+  - Synced lyrics highlight the current line and scroll with the song, and tapping a line jumps the song there. Lyrics without timings are shown as plain text.
+  - Android's back button closes the view.
 
 ## Files
 
 - `server/app.py` - routes, the host check, the hook endpoints and the Spotify routes
 - `server/state.py` - sessions and pending permission requests (`state.json` in the data folder)
 - `server/spotify.py` - Spotify Web API client
-- `web/` - the phone page (`index.html`, `app.css`, `app.js`) and the computer's setup page (`setup.html`, `setup.js`)
+- `server/lyrics.py` - lyrics from LRCLIB
+- `web/` - the phone page (`index.html`, `app.css`, `app.js`) and the setup page (`setup.html`, `setup.js`), which works on the phone and the computer
 - `hooks/claude_hook.py` - the Claude Code hook
 - `tests/` - API tests, Spotify tests (mocked), and browser tests at 640×360 and 360×640 (screenshots in `tests/shots/`)
 
@@ -62,12 +69,18 @@ There is no sign-in or pairing: any device on the home network can open `http://
 
 ### Spotify (once)
 
-On the computer, at `http://127.0.0.1:8796/setup`:
+From the phone (tap **Set up Spotify** on its music panel, or open `http://192.168.1.163:8796/setup`) or from the
+computer (`http://127.0.0.1:8796/setup`):
 
 1. Create an app at developer.spotify.com/dashboard (Web API) with the Redirect URI `http://127.0.0.1:8796/spotify/callback`.
-2. Paste its Client ID and press **Connect Spotify**.
+2. Paste its Client ID and press **Connect Spotify**, then sign in to Spotify and tap **Agree**.
+3. On the computer, that's all: Spotify sends the browser back to the setup page.
+   On the phone, Spotify opens in a new tab and ends on an `http://127.0.0.1:8796/spotify/callback?code=…` address that
+   doesn't load (127.0.0.1 is the phone itself). Copy that whole address from the address bar, go back to the setup tab,
+   paste it and press **Finish**; the server takes the one-time code from it (`POST /api/spotify/finish`).
 
-Spotify only accepts `http` redirects on 127.0.0.1, so this step can't be done from the phone.
+Spotify only accepts `http` redirect URIs on 127.0.0.1, which is why the phone needs the copy-and-paste step. The code
+is useless without the PKCE verifier the server keeps, and works once.
 
 ### Claude Code hooks
 

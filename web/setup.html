@@ -28,6 +28,14 @@
     </ol>
     <form id="cidForm" class="cid"><input id="cid" placeholder="Client ID" autocomplete="off" spellcheck="false"><button class="chip">Save</button></form>
     <p><a class="btn allow inline" id="connect" href="/spotify/login">Connect Spotify</a> <button class="chip" id="disconnect" hidden>Disconnect</button></p>
+    <div id="phoneFinish" hidden>
+      <ol class="steps" start="4">
+        <li><b>Connect Spotify</b> opens Spotify in a new tab. Sign in and tap <b>Agree</b>.</li>
+        <li>That tab then shows a page that can't load (an address starting <code>http://127.0.0.1</code>). That's expected.</li>
+        <li>Copy the whole address from that tab's address bar, come back here and paste it:</li>
+      </ol>
+      <form id="finishForm" class="cid"><input id="cbUrl" placeholder="http://127.0.0.1:8796/spotify/callback?code=…" autocomplete="off" spellcheck="false" inputmode="url"><button class="chip">Finish</button></form>
+    </div>
   </section>
   <section class="card pad">
     <h2>3 · On the phone</h2>

@@ -235,7 +235,7 @@
     const off = $("musicOff");
     if (!sp || !sp.connected) {
       off.hidden = false;
-      off.innerHTML = '<div><b>Spotify not connected</b>Open <code>http://127.0.0.1:8796/setup</code> on the computer</div>';
+      off.innerHTML = '<div><b>Spotify not connected</b><a class="chip" href="/setup">Set up Spotify</a></div>';
       return;
     }
     off.hidden = true;
@@ -257,6 +257,8 @@
     if (!volDragging && sp.device && sp.device.volume != null) setVol(sp.device.volume);
     $("vol").disabled = !(sp.device && sp.device.can_volume !== false);
     renderProgress();
+    $("lyrBtn").disabled = !(sp.active && sp.title);
+    if (lyr.open) loadLyrics();
   }
   function setVol(v) { $("vol").value = v; $("vol").style.setProperty("--p", v + "%"); }
   function renderProgress() {
@@ -312,6 +314,103 @@
     const pos = Math.round(sp.duration * (e.clientX - r.left) / r.width);
     sp.progress = pos; spAt = Date.now(); renderProgress();
     cmd("seek", { position: pos });
+  });
+
+  // ---------- lyrics (LRCLIB, through the server) ----------
+  const lyr = { open: false, key: "", data: null, cur: -1, els: [], userUntil: 0 };
+  const trackKey = () => (sp && sp.active && sp.title ? sp.title + "\n" + sp.artist : "");
+
+  function openLyrics() {
+    if (!trackKey()) { toast("Nothing is playing"); return; }
+    lyr.open = true;
+    $("lyrics").hidden = false;
+    try { history.pushState({ lyrics: 1 }, ""); } catch (e) {}
+    loadLyrics();
+  }
+  function closeLyrics(fromHistory) {
+    if (!lyr.open) return;
+    lyr.open = false;
+    $("lyrics").hidden = true;
+    if (!fromHistory && history.state && history.state.lyrics) history.back();
+  }
+  window.addEventListener("popstate", () => closeLyrics(true));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeLyrics(); });
+  $("lyrBtn").addEventListener("click", openLyrics);
+  $("art").addEventListener("click", openLyrics);
+  $("lyrClose").addEventListener("click", () => closeLyrics());
+  $("lyrPlay").addEventListener("click", () => $("play").click());
+
+  function lyricsHead() {
+    $("lyrTitle").textContent = sp.title || "";
+    $("lyrArtist").textContent = sp.artist || "";
+    if (sp.image) {
+      if ($("lyrArt").getAttribute("src") !== sp.image) {
+        $("lyrArt").src = sp.image;
+        $("lyrBg").style.backgroundImage = 'url("' + sp.image.replace(/"/g, "") + '")';
+      }
+      $("lyrArt").hidden = false;
+    } else { $("lyrArt").hidden = true; $("lyrBg").style.backgroundImage = "none"; }
+    $("lyrPlayIcon").innerHTML = sp.playing ? PAUSE : PLAY;
+  }
+  function lyricsMessage(title, sub) {
+    lyr.els = []; lyr.cur = -1;
+    $("lyrics").classList.remove("plain");
+    $("lyrLines").innerHTML = `<div class="lyr-msg"><div><b>${esc(title)}</b>${esc(sub || "")}</div></div>`;
+  }
+  async function loadLyrics() {
+    if (!lyr.open || !sp) return;
+    lyricsHead();
+    const key = trackKey();
+    if (!key) { lyricsMessage("Nothing is playing"); lyr.key = ""; return; }
+    if (key === lyr.key) return;
+    lyr.key = key; lyr.data = null;
+    lyricsMessage("Looking for lyrics…");
+    const q = new URLSearchParams({ title: sp.title, artist: sp.artist, album: sp.album || "", duration: String(sp.duration || 0) });
+    let d;
+    try { d = await api("/api/lyrics?" + q.toString()); }
+    catch (e) { d = { found: false, error: e.message }; }
+    if (lyr.key !== key) return;
+    if (d.error) lyr.key = "";        // try again on the next update
+    lyr.data = d;
+    renderLyrics();
+  }
+  function renderLyrics() {
+    const d = lyr.data;
+    if (!d || !d.found) { lyricsMessage(d && d.error ? "Lyrics unavailable" : "No lyrics for this song", d && d.error ? d.error : "LRCLIB doesn't have this one."); return; }
+    if (d.instrumental) { lyricsMessage("Instrumental", "No words in this one. Enjoy."); return; }
+    $("lyrics").classList.toggle("plain", !d.synced);
+    $("lyrLines").innerHTML = d.lines.map((l, i) =>
+      `<p class="lyr-line${d.synced && !l.text ? " gap" : ""}" data-i="${i}">${esc(l.text)}</p>`).join("");
+    lyr.els = Array.from($("lyrLines").children);
+    lyr.cur = -1;
+    $("lyrScroll").scrollTop = 0;
+    syncLyrics(true);
+  }
+  function syncLyrics(jump) {
+    const d = lyr.data;
+    if (!lyr.open || !d || !d.synced || !lyr.els.length || !sp) return;
+    const pos = sp.progress + (sp.playing ? Date.now() - spAt : 0) + 250;   // a little early reads better
+    let i = -1;
+    for (let k = 0; k < d.lines.length && d.lines[k].t <= pos; k++) i = k;
+    if (i === lyr.cur && !jump) return;
+    lyr.els.forEach((el, k) => { el.classList.toggle("now", k === i); el.classList.toggle("past", k < i); });
+    lyr.cur = i;
+    if (Date.now() < lyr.userUntil) return;
+    const el = lyr.els[Math.max(0, i)], box = $("lyrScroll");
+    const top = el.offsetTop - box.clientHeight * 0.38;
+    if (jump) { box.style.scrollBehavior = "auto"; box.scrollTop = top; box.style.scrollBehavior = ""; }
+    else box.scrollTo({ top, behavior: "smooth" });
+  }
+  setInterval(() => syncLyrics(false), 250);
+  ["touchstart", "wheel"].forEach((ev) => $("lyrScroll").addEventListener(ev, () => { lyr.userUntil = Date.now() + 4000; }, { passive: true }));
+  $("lyrLines").addEventListener("click", (e) => {
+    const el = e.target.closest(".lyr-line");
+    const d = lyr.data;
+    if (!el || !d || !d.synced) return;
+    const t = d.lines[+el.dataset.i].t;
+    sp.progress = t; spAt = Date.now(); lyr.userUntil = 0;
+    syncLyrics(true);
+    cmd("seek", { position: t });
   });
 
   // ---------- sheets ----------

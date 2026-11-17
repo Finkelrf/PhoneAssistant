@@ -169,3 +169,48 @@ def test_setup_page(browser, server):
     expect(page.locator("#connect")).to_be_visible()
     page.screenshot(path=str(SHOTS / "setup.png"))
     ctx.close()
+
+
+def test_spotify_setup_from_the_phone(browser, server):
+    """Away from the computer (here: "localhost"), Connect opens a new tab and the setup page takes the pasted address.
+    Checked at the computer size and both phone orientations."""
+    for name, (w, h) in {"computer": (1280, 900), **SIZES}.items():
+        ctx = browser.new_context(viewport={"width": w, "height": h})
+        page = ctx.new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(f"http://localhost:{server.port}/setup")
+        if page.locator("#cidForm").is_visible():
+            page.fill("#cid", "abc123def456")
+            page.click("#cidForm button")
+        expect(page.locator("#phoneFinish")).to_be_visible()
+        assert page.get_attribute("#connect", "target") == "_blank"
+        page.fill("#cbUrl", "http://127.0.0.1:8796/spotify/callback?state=x")
+        page.click("#finishForm button")
+        expect(page.locator("#toast")).to_contain_text("whole address")
+        for sel in ("#connect", "#cbUrl", "#finishForm button"):
+            b = page.locator(sel).bounding_box()
+            assert b and b["x"] >= 0 and b["x"] + b["width"] <= w, (name, sel, b)
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), name
+        page.screenshot(path=str(SHOTS / f"setup-phone-{name}.png"), full_page=True)
+        assert errors == [], errors
+        ctx.close()
+    # on the computer itself (127.0.0.1) the paste step isn't needed
+    ctx = browser.new_context(viewport={"width": 1280, "height": 900})
+    page = ctx.new_page()
+    page.goto(server.url + "/setup")
+    expect(page.locator("#connect")).to_be_visible()
+    assert page.locator("#phoneFinish").is_hidden() and page.get_attribute("#connect", "target") in (None, "")
+    ctx.close()
+
+
+def test_phone_page_links_to_spotify_setup(browser, server):
+    for name, (w, h) in SIZES.items():
+        ctx = browser.new_context(viewport={"width": w, "height": h})
+        page = ctx.new_page()
+        page.goto(f"http://localhost:{server.port}/")
+        link = page.locator("#musicOff a[href='/setup']")
+        expect(link).to_be_visible()
+        b = link.bounding_box()
+        assert b["x"] >= 0 and b["x"] + b["width"] <= w, (name, b)
+        ctx.close()

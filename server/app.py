@@ -17,6 +17,7 @@ from starlette.responses import (FileResponse, HTMLResponse, JSONResponse, Plain
                                  Response, StreamingResponse)
 from starlette.routing import Route
 
+from .lyrics import Lyrics
 from .spotify import Spotify, SpotifyError
 from .state import Hub, describe_tool
 
@@ -50,6 +51,7 @@ def create_app(data_dir: str | Path | None = None, public_url: str | None = None
     public_url = (public_url or os.environ.get("REMOTE_URL") or f"http://127.0.0.1:{port}").rstrip("/")
     hub = Hub(data_dir)
     spotify = Spotify(data_dir, f"http://127.0.0.1:{port}/spotify/callback", os.environ.get("SPOTIFY_CLIENT_ID", ""))
+    lyrics = Lyrics()
 
     hosts = {"127.0.0.1", "localhost", urlsplit(public_url).hostname}
 
@@ -234,11 +236,7 @@ def create_app(data_dir: str | Path | None = None, public_url: str | None = None
     async def sp_login(request: Request):
         if not spotify.configured:
             return RedirectResponse("/setup", 303)
-        if request.url.hostname != "127.0.0.1":
-            return HTMLResponse(
-                "<p>Open this from the computer at "
-                f"<a href='http://127.0.0.1:{port}/setup'>http://127.0.0.1:{port}/setup</a>: "
-                "Spotify only sends the sign-in back to that address.</p>", 400)
+        # from the phone too: there the sign-in ends on an address that doesn't load, and /setup takes it (sp_finish)
         return RedirectResponse(spotify.login_url(), 303)
 
     async def sp_callback(request: Request):
@@ -250,6 +248,17 @@ def create_app(data_dir: str | Path | None = None, public_url: str | None = None
             return HTMLResponse(f"<p>{e.message}</p><p><a href='/setup'>Back</a></p>", 400)
         return RedirectResponse("/setup?spotify=ok", 303)
 
+    async def sp_finish(request: Request):
+        """{url}: the address the phone's browser landed on after the Spotify sign-in."""
+        try:
+            body = await request.json()
+            await spotify.finish_from_url(str(body.get("url", "")))
+        except SpotifyError as e:
+            return JSONResponse({"error": e.message}, e.status if 400 <= e.status < 600 else 502)
+        except ValueError:
+            return JSONResponse({"error": "bad request"}, 400)
+        return await sp_status(request)
+
     async def sp_player(_):
         if not spotify.connected:
             return JSONResponse({"connected": False})
@@ -257,6 +266,15 @@ def create_app(data_dir: str | Path | None = None, public_url: str | None = None
             return JSONResponse({"connected": True, **(await spotify.player())})
         except SpotifyError as e:
             return sp_error(e)
+
+    async def sp_lyrics(request: Request):
+        q = request.query_params
+        try:
+            duration = int(q.get("duration") or 0)
+        except ValueError:
+            duration = 0
+        return JSONResponse(await lyrics.find(q.get("title", "")[:300], q.get("artist", "")[:300],
+                                              q.get("album", "")[:300], duration))
 
     async def sp_devices(_):
         try:
@@ -293,8 +311,10 @@ def create_app(data_dir: str | Path | None = None, public_url: str | None = None
         Route("/api/spotify/status", sp_status),
         Route("/api/spotify/config", sp_config, methods=["POST"]),
         Route("/api/spotify/disconnect", sp_disconnect, methods=["POST"]),
+        Route("/api/spotify/finish", sp_finish, methods=["POST"]),
         Route("/api/spotify/player", sp_player),
         Route("/api/spotify/devices", sp_devices),
+        Route("/api/lyrics", sp_lyrics),
         Route("/api/spotify/playlists", sp_playlists),
         Route("/api/spotify/{action}", sp_command, methods=["POST"]),
         Route("/spotify/login", sp_login),
@@ -304,4 +324,5 @@ def create_app(data_dir: str | Path | None = None, public_url: str | None = None
     app.state.hub = hub
     app.state.token = token
     app.state.spotify = spotify
+    app.state.lyrics = lyrics
     return app

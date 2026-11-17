@@ -1,7 +1,9 @@
 """Spotify Web API, called by the server on behalf of the phone (Authorization Code with PKCE, no client secret).
 
-The sign-in runs once from the computer at http://127.0.0.1:<port>/spotify/login, because Spotify only accepts
-http redirect URIs on the loopback address. The refresh token is kept in <data>/spotify.json.
+The sign-in runs once. Spotify only accepts http redirect URIs on the loopback address, so the redirect URI is
+http://127.0.0.1:<port>/spotify/callback. From the computer, Spotify sends the browser straight back there. From the
+phone, the browser lands on that address on the phone itself, which doesn't load; the person copies that address
+into the setup page, and finish_from_url() takes the code from it. The refresh token is kept in <data>/spotify.json.
 """
 from __future__ import annotations
 
@@ -85,6 +87,20 @@ class Spotify:
             raise SpotifyError(400, "This sign-in link expired. Start again.")
         await self._token({"grant_type": "authorization_code", "code": code, "redirect_uri": self.redirect_uri,
                            "client_id": self.cfg["client_id"], "code_verifier": verifier})
+
+    async def finish_from_url(self, pasted: str):
+        """Finish a sign-in from the address the phone's browser landed on (or just its ?code=...&state=... part)."""
+        from urllib.parse import parse_qs, urlsplit
+        text = (pasted or "").strip()
+        if len(text) > 4000:
+            raise SpotifyError(400, "That address is too long.")
+        q = parse_qs(urlsplit(text).query if "?" in text else text.lstrip("?"))
+        if q.get("error"):
+            raise SpotifyError(400, "The Spotify sign-in was cancelled. Start again.")
+        code, state = (q.get("code") or [""])[0], (q.get("state") or [""])[0]
+        if not code or not state:
+            raise SpotifyError(400, "Paste the whole address from the browser bar: it has code= and state= in it.")
+        await self.finish_login(code, state)
 
     async def _token(self, form: dict):
         r = await self.client.post(f"{ACCOUNTS}/api/token", data=form)

@@ -45,3 +45,30 @@ def test_login_url_pkce(tmp_path):
     sp = Spotify(tmp_path, "http://127.0.0.1:8796/spotify/callback", client_id="abc")
     url = sp.login_url()
     assert "code_challenge_method=S256" in url and "client_id=abc" in url and "redirect_uri=http%3A%2F%2F127.0.0.1" in url
+
+
+def test_finish_from_the_phone_with_the_pasted_address(tmp_path):
+    seen = []
+
+    def handler(req: httpx.Request):
+        seen.append(dict(x.split("=", 1) for x in req.content.decode().split("&")))
+        return httpx.Response(200, json={"access_token": "A", "refresh_token": "R", "expires_in": 3600})
+
+    sp = Spotify(tmp_path, "http://127.0.0.1:8796/spotify/callback", client_id="abc")
+    sp.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    from urllib.parse import parse_qs, urlsplit
+    state = parse_qs(urlsplit(sp.login_url()).query)["state"][0]
+
+    async def go():
+        for bad, msg in (("", "whole address"), ("http://127.0.0.1:8796/spotify/callback?error=access_denied", "cancelled"),
+                         ("http://127.0.0.1:8796/spotify/callback?code=C1&state=wrong", "expired"), ("x" * 5000, "too long")):
+            try:
+                await sp.finish_from_url(bad)
+                raise AssertionError(bad)
+            except Exception as e:
+                assert msg in str(e), (bad, e)
+        state2 = parse_qs(urlsplit(sp.login_url()).query)["state"][0]     # a wrong state used up the old one: start again
+        await sp.finish_from_url(f"  http://127.0.0.1:8796/spotify/callback?code=C2&state={state2}\n")
+    asyncio.run(go())
+    assert sp.connected and seen[-1]["code"] == "C2" and seen[-1]["grant_type"] == "authorization_code" and "code_verifier" in seen[-1]
+    assert state  # the first sign-in's state existed

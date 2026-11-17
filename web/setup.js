@@ -18,10 +18,14 @@
     $("disconnect").hidden = !s.connected;
     $("spSteps").hidden = s.connected;
     $("cidForm").hidden = s.connected;
-    if (location.hostname !== "127.0.0.1" && !s.connected) $("spState").innerHTML += "<br>Open this page at <code>http://127.0.0.1:8796/setup</code> to connect: Spotify only sends the sign-in back there.";
+    // away from the computer (the phone): the sign-in opens in a new tab and ends on an address to paste back here
+    const away = location.hostname !== "127.0.0.1";
+    $("phoneFinish").hidden = !away || !s.configured || s.connected;
+    if (away) { $("connect").target = "_blank"; $("connect").rel = "noopener"; }
   }
   const load = () => api("/api/spotify/status").then(render).catch((e) => toast(e.message));
   $("cidForm").addEventListener("submit", (e) => { e.preventDefault(); api("/api/spotify/config", { client_id: $("cid").value }).then((s) => { render(s); toast("Saved"); }).catch((e) => toast(e.message)); });
+  $("finishForm").addEventListener("submit", (e) => { e.preventDefault(); api("/api/spotify/finish", { url: $("cbUrl").value }).then((s) => { $("cbUrl").value = ""; render(s); toast("Spotify connected"); }).catch((e) => toast(e.message)); });
   $("disconnect").addEventListener("click", () => api("/api/spotify/disconnect", {}).then(render));
   $("copy").addEventListener("click", () => navigator.clipboard.writeText($("pairUrl").textContent).then(() => toast("Copied")));
   const q = new URLSearchParams(location.search).get("spotify");

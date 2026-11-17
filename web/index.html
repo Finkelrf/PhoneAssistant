@@ -37,7 +37,7 @@
         <button class="ctl" id="next" title="Next"><svg viewBox="0 0 24 24"><path d="m5 4 10 8-10 8V4Z" class="fill"/><path d="M19 5v14"/></svg></button>
         <button class="ctl small" id="repeat" title="Repeat"><svg viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg><i id="repeatOne">1</i></button>
       </div>
-      <div class="volume"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z" class="fill"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg><input type="range" id="vol" min="0" max="100" value="50" aria-label="Volume"></div>
+      <div class="volume"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z" class="fill"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg><input type="range" id="vol" min="0" max="100" value="50" aria-label="Volume"><button class="lyr-btn" id="lyrBtn" title="Lyrics"><svg viewBox="0 0 24 24"><path d="M4 6h11M4 11h11M4 16h6"/><path d="M19 4v10.5"/><circle cx="17" cy="15.5" r="2.5" class="fill"/></svg><span>Lyrics</span></button></div>
     </div>
     <div class="music-off" id="musicOff" hidden></div>
   </section>
@@ -77,6 +77,19 @@
       <button class="btn allow" id="allowBtn"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Allow</button>
     </div>
   </div>
+</div>
+
+<!-- lyrics -->
+<div class="lyrics" id="lyrics" hidden role="dialog" aria-modal="true" aria-label="Lyrics">
+  <div class="lyr-bg" id="lyrBg"></div>
+  <header class="lyr-head">
+    <img class="lyr-art" id="lyrArt" alt="">
+    <div class="meta"><div class="title" id="lyrTitle"></div><div class="artist" id="lyrArtist"></div></div>
+    <button class="ctl" id="lyrPlay" title="Play / pause"><svg viewBox="0 0 24 24" id="lyrPlayIcon"></svg></button>
+    <button class="icon-btn" id="lyrClose" title="Close"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </header>
+  <div class="lyr-scroll" id="lyrScroll"><div class="lyr-lines" id="lyrLines"></div></div>
+  <div class="lyr-src">Lyrics from LRCLIB</div>
 </div>
 
 <!-- sheets -->
