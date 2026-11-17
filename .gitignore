@@ -1,4 +1,31 @@
+# Runtime data: the hook key (token), sessions (state.json) and the Spotify login (spotify.json).
+# In production it lives in home-dashboard/configs/remote; a local run writes to data/. Never version it.
 data/
+token
+state.json
+spotify.json
+*.tmp
+
+# Secrets: never commit them, even by accident
+secrets/
+*.env
+.env*
+
+# Backups
+*.bak
+*.bak-*
+
+# Test output and tooling
 tests/shots/
+.pytest_cache/
 __pycache__/
 *.pyc
+.venv/
+venv/
+
+# Claude Code's local per-folder files and editors
+.claude/
+.idea/
+.vscode/
+*.swp
+.DS_Store
