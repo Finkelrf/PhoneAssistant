@@ -4,6 +4,9 @@ data/
 token
 state.json
 spotify.json
+phone_keys.json
+wakewords/
+wake_train/
 *.tmp
 
 # Secrets: never commit them, even by accident
@@ -29,3 +32,5 @@ venv/
 .vscode/
 *.swp
 .DS_Store
+models/
+voices/

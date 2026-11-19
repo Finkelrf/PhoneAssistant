@@ -316,6 +316,125 @@
     cmd("seek", { position: pos });
   });
 
+  // ---------- Claude plan quotas ----------
+  let quota = null;
+  function resetText(ts, long) {
+    if (!ts) return "";
+    const s = ts - (Date.now() + offsetMs) / 1000;
+    if (s <= 0) return "resetting";
+    const d = new Date(ts * 1000);
+    const hm = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    if (s < 3600) return (long ? "resets in " : "") + Math.max(1, Math.round(s / 60)) + "m";
+    if (s < 86400) {
+      const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+      return (long ? "resets in " : "") + h + "h" + (m ? " " + m + "m" : "") + (long ? " (" + hm + ")" : "");
+    }
+    const day = d.toLocaleDateString("en-GB", { weekday: "short" });
+    return (long ? "resets " : "") + day + " " + hm;
+  }
+  function pickRows(limits) {
+    const out = [], by = (k) => limits.find((l) => l.kind === k);
+    if (by("session")) out.push(by("session"));
+    if (by("weekly_all")) out.push(by("weekly_all"));
+    const scoped = limits.filter((l) => l.kind !== "session" && l.kind !== "weekly_all")
+      .sort((a, b) => b.percent - a.percent)[0];
+    if (scoped) out.push(scoped);
+    return out.length ? out : limits.slice(0, 3);
+  }
+  // The CSP (style-src 'self') blocks style="" attributes in HTML: set bar widths through the CSSOM instead.
+  function applyWidths(root) {
+    root.querySelectorAll("[data-w]").forEach((el) => { el.style.width = el.dataset.w + "%"; });
+  }
+  function renderQuota() {
+    const el = $("quota");
+    if (!quota) { el.hidden = true; return; }
+    el.hidden = false;
+    el.className = "quota";
+    if (!quota.configured) { el.classList.add("note"); el.innerHTML = '<span class="q-note">Claude quotas · tap to sign in</span>'; return; }
+    if (quota.error && !(quota.limits || []).length) { el.classList.add("note", "warn"); el.innerHTML = `<span class="q-note">${esc(quota.error)}</span>`; return; }
+    el.innerHTML = pickRows(quota.limits || []).map((l) => `
+      <span class="q-row ${esc(l.severity)}">
+        <span class="q-top"><span class="q-name">${esc(l.short)}</span><b>${Math.round(l.percent)}%</b></span>
+        <span class="q-bar"><i data-w="${Math.min(100, Math.max(0, l.percent))}"></i></span>
+        <span class="q-reset">${esc(resetText(l.resets_at))}</span>
+      </span>`).join("");
+    applyWidths(el);
+  }
+  async function loadQuota(refresh) {
+    try { quota = await api("/api/claude/quota" + (refresh ? "?refresh=1" : "")); }
+    catch (e) { if (!quota) quota = { configured: true, error: e.message, limits: [] }; }
+    renderQuota();
+    return quota;
+  }
+  loadQuota();
+  setInterval(() => { if (document.visibilityState === "visible") loadQuota(); }, 60000);
+  setInterval(() => { if (quota && quota.limits) renderQuota(); }, 30000);   // keep "resets in" current
+
+  function signInHtml(intro) {
+    return `<p class="hint">${intro}</p>
+      <ol class="q-steps">
+        <li><button class="btn allow q-signin" id="qSignIn">Sign in to Claude</button>
+          <span class="hint">Opens Claude in a new tab. Use the same account as on the computer.</span></li>
+        <li><span class="hint">Claude then shows a code. Copy it, come back to this tab and paste it here:</span>
+          <form class="cid" id="qCodeForm"><input id="qCode" placeholder="Paste the code" autocomplete="off" spellcheck="false" autocapitalize="off"><button class="chip">Connect</button></form>
+          <p class="hint warn-text" id="qErr" hidden></p></li>
+      </ol>
+      <p class="hint">This sign-in can only read your plan's usage. It can't use Claude.</p>`;
+  }
+  function bindSignIn(b) {
+    const err = (m) => { const e = b.querySelector("#qErr"); e.textContent = m; e.hidden = !m; };
+    b.querySelector("#qSignIn").addEventListener("click", async () => {
+      err("");
+      const w = window.open("", "_blank");          // open now, while the tap still counts, then point it at Claude
+      try {
+        const { url } = await api("/api/claude/login", {});
+        if (w) w.location.href = url; else location.href = url;
+      } catch (e) { if (w) w.close(); err(e.message); }
+    });
+    b.querySelector("#qCodeForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const code = b.querySelector("#qCode").value.trim();
+      if (!code) { err("Paste the code first."); return; }
+      const btn = e.target.querySelector("button"); btn.textContent = "…"; btn.disabled = true;
+      try {
+        quota = await api("/api/claude/finish", { code });
+        renderQuota(); quotaSheet(); toast("Claude connected");
+      } catch (e2) { err(e2.message); btn.textContent = "Connect"; btn.disabled = false; }
+    });
+  }
+  function quotaSheet() {
+    const q = quota || {};
+    if (!q.configured) {
+      openSheet(`<h4>Claude quotas</h4>${signInHtml("To show your plan's usage, the Remote server needs its own Claude sign-in. Two steps:")}`, bindSignIn);
+      return;
+    }
+    if (q.login_needed) {
+      openSheet(`<h4>Claude quotas</h4>${signInHtml(esc(q.error || "The sign-in has ended.") + " Sign in again:")}`, bindSignIn);
+      return;
+    }
+    const rows = (q.limits || []).map((l) => `
+      <div class="q-line ${esc(l.severity)}">
+        <div class="q-top"><span>${esc(l.label)}</span><b>${Math.round(l.percent)}% used</b></div>
+        <div class="q-bar big"><i data-w="${Math.min(100, Math.max(0, l.percent))}"></i></div>
+        <div class="sub">${esc(resetText(l.resets_at, true))}</div>
+      </div>`).join("");
+    const ex = q.extra ? `<div class="q-line"><div class="q-top"><span>Extra usage this month</span><b>${q.extra.used.toFixed(2)} ${esc(q.extra.currency)}${q.extra.limit ? " of " + q.extra.limit.toFixed(2) : ""}</b></div></div>` : "";
+    const when = q.updated ? "Updated " + ago(q.updated) + (ago(q.updated) === "now" ? "" : " ago") : "";
+    openSheet(`<h4>Claude plan${q.plan ? " · " + esc(q.plan[0].toUpperCase() + q.plan.slice(1)) : ""}</h4>
+      ${q.error ? `<p class="hint warn-text">${esc(q.error)}</p>` : ""}
+      <div class="q-list">${rows || '<p class="hint">No limits reported.</p>'}${ex}</div>
+      <div class="q-foot"><span class="hint">${esc(when)}</span><span><button class="chip ghost" id="qOut">Sign out</button> <button class="chip" id="qRefresh">Refresh</button></span></div>`, (b) => {
+      b.querySelector("#qRefresh").addEventListener("click", async (e) => {
+        e.target.textContent = "…"; await loadQuota(true); quotaSheet();
+      });
+      b.querySelector("#qOut").addEventListener("click", async () => {
+        if (!confirm("Sign the Remote server out of Claude? The quotas stop showing until you sign in again.")) return;
+        quota = await api("/api/claude/logout", {}); renderQuota(); quotaSheet();
+      });
+    });
+  }
+  $("quota").addEventListener("click", quotaSheet);
+
   // ---------- lyrics (LRCLIB, through the server) ----------
   const lyr = { open: false, key: "", data: null, cur: -1, els: [], userUntil: 0 };
   const trackKey = () => (sp && sp.active && sp.title ? sp.title + "\n" + sp.artist : "");
@@ -416,6 +535,7 @@
   // ---------- sheets ----------
   function openSheet(html, bind) {
     $("sheetBody").innerHTML = html;
+    applyWidths($("sheetBody"));
     $("sheetWrap").hidden = false;
     if (bind) bind($("sheetBody"));
   }
@@ -465,7 +585,9 @@
         ${sw("sound", "Sound alerts", "When Claude asks for approval or needs you")}
         ${sw("doneChime", "Chime when Claude finishes", "")}
         ${sw("nag", "Remind every 45 s", "While something is still waiting")}
-        <div class="row"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z" class="fill"/></svg><input type="range" id="prefVol" min="0" max="100" value="${Math.round(prefs.volume * 100)}" style="--p:${Math.round(prefs.volume * 100)}%"><button class="chip" id="testSound">Test</button></div>
+        <div class="row"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z" class="fill"/></svg><input type="range" id="prefVol" min="0" max="100" value="${Math.round(prefs.volume * 100)}"><button class="chip" id="testSound">Test</button></div>
+        <h4>Voice</h4>
+        <button class="row" id="voiceSettingsBtn"><span class="grow"><div class="nm">Wake word and voice</div><div class="sub" id="voiceSub">${esc(window.RemoteVoice ? window.RemoteVoice.summary() : "")}</div></span><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
       </div><div>
         <h4>Phone answers: wait for</h4>
         <div class="seg" id="waitSeg">${waits.map(([v, l]) => `<button data-wait="${v}" class="${v === wait ? "on" : ""}">${l}</button>`).join("")}</div>
@@ -480,16 +602,29 @@
         if (k === "wake") { if (prefs[k]) keepAwake(); else if (wakeLock) { wakeLock.release(); wakeLock = null; } }
       }));
       const pv = b.querySelector("#prefVol");
+      pv.style.setProperty("--p", pv.value + "%");
       pv.addEventListener("input", () => { prefs.volume = pv.value / 100; pv.style.setProperty("--p", pv.value + "%"); savePrefs(); });
       b.querySelector("#testSound").addEventListener("click", () => { audio(); SOUNDS.permission(); });
       b.querySelectorAll("[data-wait]").forEach((el) => el.addEventListener("click", async () => {
         try { await api("/api/settings", { wait: +el.dataset.wait }); b.querySelectorAll("[data-wait]").forEach((x) => x.classList.toggle("on", x === el)); }
         catch (e) { toast(e.message); }
       }));
+      b.querySelector("#voiceSettingsBtn").addEventListener("click", () => { if (window.RemoteVoice) window.RemoteVoice.openSettings(); });
       b.querySelector("#fsBtn").addEventListener("click", () => {
         if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => toast("Full screen is not available"));
         closeSheet();
       });
     });
   });
+
+  // ---------- for voice.js ----------
+  window.Remote = {
+    api, toast, prefs, savePrefs, openSheet, closeSheet, audio, tone, sw,
+    music: {
+      playing: () => !!(sp && sp.active && sp.playing),
+      pause: () => cmd("pause"),
+      play: () => cmd("play"),
+    },
+  };
+
 })();

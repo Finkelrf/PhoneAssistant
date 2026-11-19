@@ -38,7 +38,7 @@ def seed(server):
     server.run_hook("event", {"session_id": "b", "hook_event_name": "Stop"})
 
 
-def open_page(browser, server, size, scale=1):
+def open_page(browser, server, size, scale=1, before=None):
     w, h = SIZES[size]
     ctx = browser.new_context(viewport={"width": w, "height": h}, device_scale_factor=scale, is_mobile=True, has_touch=True)
     page = ctx.new_page()
@@ -46,6 +46,8 @@ def open_page(browser, server, size, scale=1):
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.route("**/api/spotify/player", lambda r: r.fulfill(json=PLAYER))
     page.route("**/api/spotify/*", lambda r: r.fulfill(json={"ok": True}) if r.request.method == "POST" else r.fallback())
+    if before:
+        before(page)
     page.goto(server.url + "/")
     page.click("#start")
     return ctx, page, errors
@@ -100,6 +102,33 @@ def test_allow_from_phone(browser, server, size):
     assert json.loads(out["r"][0])["hookSpecificOutput"]["decision"]["behavior"] == "allow"
     expect(page.locator("#ask")).to_be_hidden()
     expect(page.locator(".sess.permission")).to_have_count(0)
+    assert errors == []
+    ctx.close()
+
+
+@pytest.mark.parametrize("size", ["landscape", "portrait"])
+def test_long_request_keeps_buttons(browser, server, size):
+    """A big request (an AskUserQuestion with long options) scrolls inside the card; Allow and Deny stay on screen."""
+    seed(server)
+    server.req("/api/settings", {"away": True})
+    ctx, page, errors = open_page(browser, server, size, scale=2)
+    opts = [{"label": f"Option {i}", "description": "A long description of this choice. " * 6} for i in range(4)]
+    ev = {"session_id": "c", "hook_event_name": "PermissionRequest", "tool_name": "AskUserQuestion",
+          "tool_input": {"questions": [{"question": "How should the phone get mic access? " * 5, "header": "Mic access",
+                                        "options": opts, "multiSelect": False}]}}
+    p, data = server.hook("permission", ev)
+    out = {}
+    t = threading.Thread(target=lambda: out.update(r=p.communicate(data, timeout=30)))
+    t.start()
+    expect(page.locator("#ask")).to_be_visible()
+    for btn in ("#allowBtn", "#denyBtn"):
+        expect(page.locator(btn)).to_be_in_viewport(ratio=1)
+    assert no_overflow(page) == []
+    assert page.evaluate("(() => { const d = document.getElementById('askDetail'); return d.scrollHeight > d.clientHeight; })()")
+    page.screenshot(path=str(SHOTS / f"permission-long-{size}.png"))
+    page.click("#denyBtn")
+    t.join(15)
+    assert json.loads(out["r"][0])["hookSpecificOutput"]["decision"]["behavior"] == "deny"
     assert errors == []
     ctx.close()
 

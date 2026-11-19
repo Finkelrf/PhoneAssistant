@@ -17,13 +17,17 @@ def free_port():
 
 
 class Server:
-    def __init__(self, tmp):
+    def __init__(self, tmp, env=None, https=False):
         self.port = free_port()
+        self.https_port = free_port() if https else 0
         self.data = tmp / "data"
         self.url = f"http://127.0.0.1:{self.port}"
-        self.proc = subprocess.Popen([sys.executable, "-m", "server", "--host", "127.0.0.1", "--port", str(self.port),
-                                      "--data", str(self.data)], cwd=ROOT,
-                                     env={**os.environ, "REMOTE_URL": "http://192.168.1.50:8796"})
+        args = [sys.executable, "-m", "server", "--host", "127.0.0.1", "--port", str(self.port), "--data", str(self.data)]
+        if https:
+            args += ["--https-port", str(self.https_port)]
+        self.proc = subprocess.Popen(args, cwd=ROOT,
+                                     env={**os.environ, "REMOTE_URL": "http://192.168.1.50:8796", "REMOTE_HTTPS_PORT": "0",
+                                          **(env or {})})
         for _ in range(100):
             try:
                 urllib.request.urlopen(self.url + "/health", timeout=1); break

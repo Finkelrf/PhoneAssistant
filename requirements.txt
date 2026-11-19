@@ -10,3 +10,18 @@ httpx==0.28.1
 httpcore==1.0.9
 certifi==2025.8.3
 segno==1.6.6
+cryptography==46.0.7
+cffi==2.1.1
+pycparser==3.12
+# wake word (openWakeWord models on onnxruntime) and WebSockets for the phone's audio
+onnxruntime==1.32.0
+numpy==2.5.5
+flatbuffers==25.12.19
+packaging==26.3
+protobuf==7.36.2
+websockets==15.0.1
+# wake word training on this computer (writes the trained model as ONNX)
+onnx==1.23.2
+ml_dtypes==0.7.0
+# answers spoken on this computer
+piper-tts==1.3.0

@@ -37,8 +37,33 @@
       <form id="finishForm" class="cid"><input id="cbUrl" placeholder="http://127.0.0.1:8796/spotify/callback?code=…" autocomplete="off" spellcheck="false" inputmode="url"><button class="chip">Finish</button></form>
     </div>
   </section>
+  <section class="card pad" id="voice">
+    <h2>3 · Voice: ask Claude out loud</h2>
+    <p class="muted">Say the wake word (or tap the mic) and ask a question. Claude answers out loud, using the Remote server's own Claude sign-in (your plan).</p>
+    <h3>a · Install Remote's certificate on the phone (once)</h3>
+    <p class="muted">The phone only lets a page use the microphone over HTTPS. Remote makes its own certificate that only works for this computer's address.</p>
+    <ol class="steps">
+      <li>On the phone, open <code id="caLink">/ca.crt</code> here: <a class="chip inline" href="/ca.crt" id="caBtn">Download certificate</a></li>
+      <li>Android asks for a name: type <b>Remote</b>, choose <b>VPN and apps</b>, and confirm. (Android may ask you to set a screen lock first.) If nothing opens, go to <b>Settings › Security › Encryption &amp; credentials › Install from storage</b> and pick <b>remote-ca.crt</b> from Downloads.</li>
+      <li>Open the secure address and add it to the home screen: <a class="chip inline" id="secureLink" href="#">…</a></li>
+    </ol>
+    <p class="muted" id="secureState"></p>
+    <h3>b · Wake word</h3>
+    <p class="muted">Pick the engine on the phone: <b>Settings › Voice › Wake word</b>.</p>
+    <p class="muted"><b>openWakeWord</b> (default, nothing to sign up for): the phone streams its microphone to this computer over the home network, and the computer listens for the word. Ready-made words: Hey Jarvis (default), Alexa, Hey Mycroft, Hey Rhasspy.</p>
+    <p class="muted">Your own word, such as “Hey Claude”: train it with openWakeWord's training notebook (search “openWakeWord automatic model training”), then upload the <code>.onnx</code> file here:</p>
+    <form id="owwForm" class="cid upload"><input id="owwLabel" placeholder="What you say, e.g. Hey Claude" autocomplete="off"><input id="owwFile" type="file" accept=".onnx"><button class="chip">Upload</button></form>
+    <p class="muted" id="owwState"></p>
+    <p><button class="chip" id="owwRemove" hidden>Remove my openWakeWord model</button></p>
+    <p class="muted"><b>Picovoice Porcupine</b> (optional): the word is heard on the phone itself. Needs a free AccessKey from <a href="https://console.picovoice.ai/" target="_blank" rel="noopener">console.picovoice.ai</a> (it doesn't accept Gmail-type addresses).</p>
+    <form id="keyForm" class="cid"><input id="pvKey" placeholder="Picovoice AccessKey" autocomplete="off" spellcheck="false"><button class="chip">Save</button></form>
+    <p class="muted" id="pvState"></p>
+    <p class="muted">Your own Porcupine word: train it in the Picovoice console for <b>Web (WASM)</b> and upload the <code>.ppn</code> file:</p>
+    <form id="ppnForm" class="cid upload"><input id="ppnLabel" placeholder="What you say, e.g. Hey Claude" autocomplete="off"><input id="ppnFile" type="file" accept=".ppn"><button class="chip">Upload</button></form>
+    <p><button class="chip" id="ppnRemove" hidden>Remove my Porcupine word</button></p>
+  </section>
   <section class="card pad">
-    <h2>3 · On the phone</h2>
+    <h2>4 · On the phone</h2>
     <p class="muted">Landscape on a stand works best. Tap once to turn on sounds and full screen. <a href="/">Open here</a></p>
   </section>
 </main>
